@@ -1,0 +1,184 @@
+# Worldwide Bank Demo
+
+Sets up the infrastructure and platform for the https://github.com/abajwa-hw/masterclass/tree/master/ranger-atlas[Ranger Atlas (Worldwide Bank) legacy demo] and then runs the legacy application Bash script.
+
+# Running
+
+Assuming a typical configuration of all runtime variables declared in a single file (`runtime.yml`), save the `deployment_id`:
+
+[source,shell]
+----
+ansible-playbook -e @runtime.yml -e deployment_id=mydemo site.yml
+----
+
+# Configuration
+
+The `site.yml` playbook is the entrypoint for this demo installation, and its sub-playbooks require the following runtime variables and files. If further configuration is needed, the link:config[config] directory contains details for the link:config/infrastructure.yml[infrastructure], link:config/platform.yml[platform], and link:config/application.yml[application] layers.
+
+## Runtime Variables
+
+At minimum, the demo requires the following runtime variables to execute:
+
+.Minimum extra variables for runtime (Fusion Cloud)
+[source,yaml]
+----
+# These are specific for Fusion Cloud
+subnet: "GENERAL_INTERNAL_NET"
+domain: "general.fuse.l42.cloudera.com"
+enddate: "{{ lookup('pipe', end_date_cmd) }}"
+end_date_cmd: "date -d '+3 days' +%m%d%Y"
+
+# These are user- and installation-specific
+owner: your_OKTA_email_address
+public_key: the_label_of_your_SSH_key
+project_name: descriptive_text
+deployment_id: unique_prefix_for_instances
+----
+
+Commonly, these variables can be defined individually at the Ansible command line (`-e deployment_id=test001`), grouped into an included YAML file (`-e @runtime.yml`), or a combination of both.
+
+## Local CSDs and Parcels
+
+The installation expects a number of local CSDs and parcels installed to `/opt/parcels-mirror` as directed by the link:config/platform.yml[platform.yml] configuration file. If you need to change the location, update this configuration file to point to your local parcels directory.
+
+The CSDs and parcels can be downloaded from the https://cloudera.com/downloads[Cloudera Trial Downloads] site using your Okta login credentials.
+
+* https://www.cloudera.com/downloads/cdf/csp.html[Cloudera Stream Processing (CSP)]
+* https://www.cloudera.com/downloads/cdf/csm.html[Cloudera Streams Management (CSM)]
+* https://www.cloudera.com/downloads/cdf/csa.html[Cloudera Streaming Analytics (CSA)]
+
+.Required local CSDs and parcels
+[source,yaml]
+----
+local_csds:
+  - /opt/parcels-mirror/SCHEMAREGISTRY-0.8.0.jar
+  - /opt/parcels-mirror/STREAMS_MESSAGING_MANAGER-2.1.0.jar
+  - /opt/parcels-mirror/FLINK-1.9.1-csa1.1.0.0-cdh7.0.3.0-79-1753674.jar
+
+local_parcels: 
+  - /opt/parcels-mirror/SCHEMAREGISTRY-0.8.0.2.0.1.0-29-el7.parcel
+  - /opt/parcels-mirror/SCHEMAREGISTRY-0.8.0.2.0.1.0-29-el7.parcel.sha
+  - /opt/parcels-mirror/STREAMS_MESSAGING_MANAGER-2.1.0.2.0.1.0-29-el7.parcel
+  - /opt/parcels-mirror/STREAMS_MESSAGING_MANAGER-2.1.0.2.0.1.0-29-el7.parcel.sha
+  - /opt/parcels-mirror/FLINK-1.9.1-csa1.1.0.0-cdh7.0.3.0-79-1753674-el7.parcel
+  - /opt/parcels-mirror/FLINK-1.9.1-csa1.1.0.0-cdh7.0.3.0-79-1753674-el7.parcel.sha
+----
+
+## OpenStack (Fusion Cloud) Credentials
+
+The underlying Ansible modules expect either a standard OpenStack `clouds.yaml` file or the `OS_*` environment variables to discover and use the OpenStack endpoint.
+
+Example credential variables to be exported:
+
+[source,shell]
+----
+$ env | grep OS_
+OS_REGION_NAME=RegionOne
+OS_INTERFACE=public
+OS_AUTH_URL=https://api-fusion.l42.cloudera.com:5000/v3
+OS_USERNAME=fabio.ghirardello
+OS_PROJECT_ID=b07765cd6ccf4530a74bcc007d0b55ed
+OS_USER_DOMAIN_NAME=CLDR
+OS_PROJECT_NAME=SE-GOES
+OS_PASSWORD=xxxxyyyyzzzz
+OS_IDENTITY_API_VERSION=3
+----
+
+Example `cloud.yaml`: create a file `~/.config/openstack/clouds.yaml` with the following:
+
+[source,yaml]
+----
+clouds:
+  openstack:
+    auth:
+      auth_url: https://api-fusion.l42.cloudera.com:5000
+      project_name: general
+      username: <username>
+      password: <Password>
+      domain_name: CLDR
+    region_name: RegionOne
+----
+
+## SSH (Machine) Keys
+
+The `public_key` runtime variable must correspond with the label of a SSH key previously enabled in your OpenStack (Fusion Cloud) console.  The SSH key should also be loaded into your SSH agent.
+
+
+## How to run locally
+
+1. Ensure you have ssh-agent running and your private key loaded.
+
+[source,shell]
+----
+$ ssh-add -l
+2048 SHA256:r4CHHd7yQAenHvATf6chdi2Sl7E+BrWPEvLvknXXfsY /home/fabio/goes-sase.pem (RSA)
+----
+
+2. Ensure you exported your Cloud Provider credentials
+
+Below example for AWS:
+
+[source,shell]
+----
+$ env | grep AWS_
+AWS_SECRET_ACCESS_KEY=xxxxxxxx-yyyyyyy-zzzzzz
+AWS_ACCESS_KEY_ID=AKIXXXXXXXYYYYYYZZZZZZ
+----
+
+Below example for FusionCloud (on OpenStack):
+
+[source,shell]
+----
+$ env | grep OS_
+OS_REGION_NAME=RegionOne
+OS_INTERFACE=public
+OS_AUTH_URL=https://api-fusion.l42.cloudera.com:5000/v3
+OS_USERNAME=fabio.ghirardello
+OS_PROJECT_ID=b07765cd6ccf4530a74bcc007d0b55ed
+OS_USER_DOMAIN_NAME=CLDR
+OS_PROJECT_NAME=SE-GOES
+OS_PASSWORD=xxxyyyzzz
+OS_IDENTITY_API_VERSION=3
+----
+
+
+3. Download the required Ansible Roles and run the Playbook
+
+Below example for AWS:
+
+[source,shell]
+----
+ansible-galaxy install -r roles/requirements.yml -p roles/
+
+ansible-playbook site.yml \
+-e "cloud=aws" \
+-e "deployment_id=mywwb" \
+-e "enddate=04252020" \
+-e "owner=me@cloudera.com" \
+-e "project_name=wwbank" \
+-e "public_key=goes-sase" \
+-e "region=us-east-1" \
+-e "vpc_id=vpc-0912105d299a627bf" \
+-e "subnet=subnet-0fc93769293dc88b8" \
+-e "security_group=sg-0fe755db5fc1b6120"
+----
+
+Below example for FusionCloud (on OpenStack):
+
+[source,shell]
+----
+ansible-galaxy install -r roles/requirements.yml -p roles/
+
+ansible-playbook site.yml \
+-e "cloud=fusion" \
+-e "deployment_id=wwbank" \
+-e "enddate=04252020" \
+-e "owner=fabio@cloudera.com" \
+-e "project_name=wwbank" \
+-e "public_key=fusion" \
+-e "region=RegionOne" \
+-e "domain=general.fuse.l42.cloudera.com" \
+-e "vpc_id=SE-GOES" \
+-e "subnet=GENERAL_INTERNAL_NET" \
+-e "security_group=default"
+----

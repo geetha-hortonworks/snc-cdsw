@@ -1,0 +1,10 @@
+---
+- name: NOTIFICATIONS
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Set stats for downstream notifications
+      set_stats:
+        data:
+          cm_url: "http://{{ groups['main_master'][0] }}:7180"
